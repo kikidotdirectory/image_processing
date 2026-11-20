@@ -4,8 +4,10 @@ Usage:
     uv run dropbox_sync.py /Art/PSDs /Art/Exports
 
 Needs DROPBOX_APP_KEY and DROPBOX_REFRESH_TOKEN in the environment (see dropbox_auth.py).
-PSDs whose contents haven't changed since the last successful run are skipped; the
-record of what has been done is kept in out/.dropbox_state.json.
+PSDs are grouped by the first word of their filename ("empire final.psd" -> "empire");
+only the most recently modified PSD per word is converted, and its JPGs are named after
+that word. Words whose chosen PSD hasn't changed since the last successful run are
+skipped; the record of what has been done is kept in out/.dropbox_state.json.
 """
 
 import argparse
@@ -13,6 +15,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -51,6 +54,24 @@ def list_psds(dbx: dropbox.Dropbox, folder: str) -> list[FileMetadata]:
     ]
 
 
+def first_word(filename: str) -> str:
+    """`"empire final v2.psd"` -> `"empire"`. Falls back to the whole stem if it's blank."""
+    stem = Path(filename).stem
+    words = stem.split()
+    return words[0] if words else stem
+
+
+def dedupe_by_first_word(psds: list[FileMetadata]) -> dict[str, FileMetadata]:
+    """Keep one PSD per first word (case-insensitive): the most recently modified one."""
+    chosen: dict[str, FileMetadata] = {}
+    for psd in psds:
+        key = first_word(cast(str, psd.name)).casefold()
+        current = chosen.get(key)
+        if current is None or cast(datetime, psd.server_modified) > cast(datetime, current.server_modified):
+            chosen[key] = psd
+    return chosen
+
+
 def load_state() -> dict[str, str]:
     try:
         return cast(dict[str, str], json.loads(STATE_FILE.read_text()))
@@ -74,19 +95,25 @@ def main() -> None:
     dbx = connect()
     state = load_state()
     psds = list_psds(dbx, src)
-    print(f"Found {len(psds)} PSD(s) in {src}")
+    chosen = dedupe_by_first_word(psds)
+    print(f"Found {len(psds)} PSD(s) in {src}, {len(chosen)} unique by first word")
+    chosen_ids = {cast(str, p.id) for p in chosen.values()}
+    for psd in psds:
+        if cast(str, psd.id) not in chosen_ids:
+            print(f"  ignore   {cast(str, psd.path_display)} (older duplicate)")
 
     failed: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
-        for psd in psds:
+        for key, psd in chosen.items():
             path = cast(str, psd.path_display)
             content_hash = cast(str, psd.content_hash)
-            if not force and state.get(path) == content_hash:
+            if not force and state.get(key) == content_hash:
                 print(f"  skip     {path} (unchanged)")
                 continue
 
             print(f"  convert  {path}")
-            local_psd = Path(tmp) / cast(str, psd.name)
+            # Save under the first word so the JPGs are named `<word>.jpg` / `<word>_thumb.jpg`.
+            local_psd = Path(tmp) / f"{first_word(cast(str, psd.name))}.psd"
             try:
                 dbx.files_download_to_file(str(local_psd), cast(str, psd.path_lower))  # pyright: ignore[reportUnknownMemberType]
                 for jpg in convert_psd_to_jpg(local_psd):
@@ -101,7 +128,7 @@ def main() -> None:
             finally:
                 local_psd.unlink(missing_ok=True)  # PSDs are large; don't let them pile up
 
-            state[path] = content_hash
+            state[key] = content_hash
             save_state(state)
 
     if failed:
