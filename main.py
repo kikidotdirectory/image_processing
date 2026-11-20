@@ -72,16 +72,21 @@ def convert_psd_to_jpg(file_path: Path, out_dir: Path = OUT_DIR) -> tuple[Path, 
     return main_path, thumb_path
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Convert PSDs to watermarked JPGs in out/.")
+    parser = argparse.ArgumentParser(description="Convert PSDs to watermarked JPGs.")
     _ = parser.add_argument("psd", type=Path, nargs="+", help="PSD file(s) to convert")
+    _ = parser.add_argument(
+        "-o", "--out-dir", type=Path, default=OUT_DIR,
+        help="folder to write JPGs to (default: out/ next to main.py)",
+    )
     args = parser.parse_args()
 
     psd_paths = cast(list[Path], args.psd)
+    out_dir = cast(Path, args.out_dir)
     for psd_path in psd_paths:
         if not psd_path.is_file():
             parser.error(f"file not found: {psd_path}")
     for psd_path in psd_paths:
-        main_path, _ = convert_psd_to_jpg(psd_path)
+        main_path, _ = convert_psd_to_jpg(psd_path, out_dir)
         print(f"{psd_path} -> {main_path}")
 
 if __name__ == "__main__":

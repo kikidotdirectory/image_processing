@@ -89,8 +89,13 @@ def main() -> None:
     _ = parser.add_argument("src", help="Dropbox folder with PSDs, e.g. /Art/PSDs")
     _ = parser.add_argument("dest", help="Dropbox folder to upload JPGs to, e.g. /Art/Exports")
     _ = parser.add_argument("--force", action="store_true", help="reconvert even unchanged PSDs")
+    _ = parser.add_argument(
+        "-o", "--out-dir", type=Path, default=OUT_DIR,
+        help="local folder to keep copies of the JPGs in (default: out/ next to main.py)",
+    )
     args = parser.parse_args()
     src, dest, force = cast(str, args.src), cast(str, args.dest).rstrip("/"), cast(bool, args.force)
+    out_dir = cast(Path, args.out_dir)
 
     dbx = connect()
     state = load_state()
@@ -116,7 +121,7 @@ def main() -> None:
             local_psd = Path(tmp) / f"{first_word(cast(str, psd.name))}.psd"
             try:
                 dbx.files_download_to_file(str(local_psd), cast(str, psd.path_lower))  # pyright: ignore[reportUnknownMemberType]
-                for jpg in convert_psd_to_jpg(local_psd):
+                for jpg in convert_psd_to_jpg(local_psd, out_dir):
                     _ = dbx.files_upload(  # pyright: ignore[reportUnknownMemberType]
                         jpg.read_bytes(), f"{dest}/{jpg.name}", mode=WriteMode.overwrite
                     )
