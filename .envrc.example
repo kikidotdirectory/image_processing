@@ -1,0 +1,5 @@
+# Copy to .envrc, fill in, then run `direnv allow`. .envrc is gitignored.
+# App key: Dropbox App Console -> your app -> Settings.
+export DROPBOX_APP_KEY=""
+# Refresh token: run `uv run dropbox_auth.py` after setting the app key.
+export DROPBOX_REFRESH_TOKEN=""

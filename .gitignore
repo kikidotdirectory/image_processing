@@ -14,3 +14,9 @@ wheels/
 
 # Generated images
 out/
+
+# Secrets
+.envrc
+
+# macOS
+.DS_Store

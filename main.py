@@ -49,7 +49,8 @@ def make_thumbnail(img: Image.Image, max_size: int) -> Image.Image:
     thumb.thumbnail((max_size, max_size))
     return thumb
 
-def convert_psd_to_jpg(file_path: Path) -> None:
+def convert_psd_to_jpg(file_path: Path, out_dir: Path = OUT_DIR) -> tuple[Path, Path]:
+    """Write `<stem>.jpg` (watermarked) and `<stem>_thumb.jpg` to `out_dir`, returning both paths."""
     psdimage = PSDImage.open(file_path)
     image = psdimage.composite()
 
@@ -63,9 +64,12 @@ def convert_psd_to_jpg(file_path: Path) -> None:
     main = apply_watermark(main, stamp, "top-left", margin)
     main = apply_watermark(main, link, margin=20, width=250)
 
-    OUT_DIR.mkdir(exist_ok=True)
-    main.save(OUT_DIR / f'{file_path.stem}.jpg')
-    thumbnail.save(OUT_DIR / f'{file_path.stem}_thumb.jpg')
+    out_dir.mkdir(parents=True, exist_ok=True)
+    main_path = out_dir / f'{file_path.stem}.jpg'
+    thumb_path = out_dir / f'{file_path.stem}_thumb.jpg'
+    main.save(main_path)
+    thumbnail.save(thumb_path)
+    return main_path, thumb_path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert PSDs to watermarked JPGs in out/.")
@@ -77,8 +81,8 @@ def main() -> None:
         if not psd_path.is_file():
             parser.error(f"file not found: {psd_path}")
     for psd_path in psd_paths:
-        convert_psd_to_jpg(psd_path)
-        print(f"{psd_path} -> {OUT_DIR / psd_path.stem}.jpg")
+        main_path, _ = convert_psd_to_jpg(psd_path)
+        print(f"{psd_path} -> {main_path}")
 
 if __name__ == "__main__":
     main()
